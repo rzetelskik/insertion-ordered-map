@@ -1,0 +1,31 @@
+nie nadzorujemy pamieci sami, uzywamy smart pointerow
+
+zadbac o silna odpornosc na wyjatki
+
+np taka funkcja jej nie zapewnia:
+
+do() {
+  map.insert(elem1)
+  map.insert(elem2)
+}
+
+jesli zawiedzie drugi insert, to mapa zostaje pozostawiona w niewlasciwym stanie, tj elem1 zostaje w mapie
+
+dwa podejscia:
+1) copy & swap
+  kopiujemy kontener, robimy to co chcemy na kopii i na koncu robimy swapa
+  - wada : musimy skopiowac dane, co w przypadku tego zadania ssie
+
+2) rollback
+  try {
+    map.insert(elem1)
+    map.insert(elem2)
+  } catch (&e) {}
+
+musimy miec mozliwosc zrobienia rollbacka tak, ze zawsze sie powiedzie - uwaznie czytac dokumentacje,rozumiec z jakich funkcji korzystamy i co sie moze stac
+w tym celu sprawdzic exception guarantees
+
+ -wada : to podejscie jest trudniejsza
+ -zaleta : jest duzo efektywniejsze
+
+
