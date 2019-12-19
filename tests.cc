@@ -16,4 +16,8 @@ private:
     std::streambuf * old;
 };
 
-BOOST_AUTO_TEST_CASE(empty) {}
+BOOST_AUTO_TEST_CASE(insert) {
+    insertion_ordered_map<int, int> aaa;
+    BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    BOOST_CHECK(!aaa.insert(4, 5) && (aaa.size() == 1));
+}
