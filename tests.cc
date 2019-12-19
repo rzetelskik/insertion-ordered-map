@@ -37,3 +37,20 @@ BOOST_AUTO_TEST_CASE(contains) {
     BOOST_CHECK(aaa.contains(4));
     BOOST_CHECK(!aaa.contains(5));
 }
+
+BOOST_AUTO_TEST_CASE(copy_constructor) {
+    insertion_ordered_map<int, int> aaa;
+    BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    BOOST_CHECK(aaa.insert(5, 5) && (aaa.size() == 2));
+    insertion_ordered_map<int, int> bbb(aaa);
+    BOOST_CHECK(bbb.contains(4));
+    BOOST_CHECK(bbb.contains(5));
+}
+
+BOOST_AUTO_TEST_CASE(copy_on_write) {
+    insertion_ordered_map<int, int> aaa;
+    BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    insertion_ordered_map<int, int> bbb(aaa);
+    BOOST_CHECK(aaa.insert(5, 5) && (aaa.size() == 2));
+    BOOST_CHECK(!bbb.contains(5));
+}
