@@ -63,6 +63,7 @@ public:
 
     bool insert(K const &k, V const &v) {
         prepare_to_modify(false);
+
         pair_t pair;
         bool unique = true;
         typename map_t::iterator it = data->map->find(k);
@@ -86,16 +87,18 @@ public:
                 data->list->pop_back();
             throw;
         }
-    }; //TODO copy on write
+    };
 
     void erase(K const &k) {
+        prepare_to_modify(false);
+
         typename map_t::iterator it = data->map->find(k);
         if (it == data->map->end())
             throw lookup_error();
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
-    }; //TODO handle exceptions thrown by erase, copy on write
+    }; //TODO handle exceptions thrown by erase
 
 
     void merge(insertion_ordered_map const &other) {}; //TODO noexcept, copy on write?
@@ -118,7 +121,7 @@ public:
         prepare_to_modify(false); //TODO except
         data->list->clear();
         data->map->clear();
-    }; //TODO copy on write
+    };
 
     bool contains(K const &k) noexcept {
         return (data->map->find(k) != data->map->end());
