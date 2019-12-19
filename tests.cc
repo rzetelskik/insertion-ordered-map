@@ -21,3 +21,12 @@ BOOST_AUTO_TEST_CASE(insert) {
     BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
     BOOST_CHECK(!aaa.insert(4, 5) && (aaa.size() == 1));
 }
+
+BOOST_AUTO_TEST_CASE(erase) {
+    insertion_ordered_map<int, int> aaa;
+    BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    BOOST_CHECK_NO_THROW(aaa.erase(4));
+    BOOST_CHECK(aaa.empty());
+    BOOST_CHECK_THROW(aaa.erase(4), lookup_error);
+    BOOST_CHECK_THROW(aaa.erase(5), lookup_error);
+}

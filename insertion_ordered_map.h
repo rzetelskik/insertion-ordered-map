@@ -71,7 +71,18 @@ public:
             throw;
         }
     };
-    void erase(K const &k) {}; //TODO noexcept?
+
+    void erase(K const &k) {
+        typename _map::iterator it = map.find(k);
+
+        if (it == map.end()) throw lookup_error();
+
+        map.erase(it);
+        typename _list::iterator it_list = it->second;
+        list.erase(it_list);
+    }; //TODO handle exceptions thrown by erase
+
+
     void merge(insertion_ordered_map const &other) {}; //TODO noexcept?
     V &at(K const &k) {}; //TODO noexcept?
     V const &at(K const &k) const {}; //TODO noexcept?
