@@ -70,7 +70,7 @@ public:
                 list.pop_back();
             throw;
         }
-    };
+    }; //TODO copy on write
 
     void erase(K const &k) {
         typename _map::iterator it = map.find(k);
@@ -80,11 +80,13 @@ public:
         map.erase(it);
         typename _list::iterator it_list = it->second;
         list.erase(it_list);
-    }; //TODO handle exceptions thrown by erase
+    }; //TODO handle exceptions thrown by erase, copy on write
 
 
-    void merge(insertion_ordered_map const &other) {}; //TODO noexcept?
+    void merge(insertion_ordered_map const &other) {}; //TODO noexcept, copy on write?
+
     V &at(K const &k) {}; //TODO noexcept?
+
     V const &at(K const &k) const {}; //TODO noexcept?
 
     V &operator[](K const &k) {}; //TODO noexcept?
@@ -97,8 +99,14 @@ public:
         return list.empty();
     };
 
-    void clear() {}; //TODO noexcept?
-    bool contains(K const &k) {};//TODO noexcept?
+    void clear() noexcept {
+        list.clear();
+        map.clear();
+    }; //TODO copy on write
+
+    bool contains(K const &k) noexcept {
+        return (map.find(k) != map.end());
+    };
 
 //    iterator begin() const {
 //        return iterator(list.begin());

@@ -30,3 +30,10 @@ BOOST_AUTO_TEST_CASE(erase) {
     BOOST_CHECK_THROW(aaa.erase(4), lookup_error);
     BOOST_CHECK_THROW(aaa.erase(5), lookup_error);
 }
+
+BOOST_AUTO_TEST_CASE(contains) {
+    insertion_ordered_map<int, int> aaa;
+    BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    BOOST_CHECK(aaa.contains(4));
+    BOOST_CHECK(!aaa.contains(5));
+}
