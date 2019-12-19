@@ -22,7 +22,7 @@ private:
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
 
     class data_t {
-    public:
+    public: //TODO handle this
         std::shared_ptr<map_t> map;
         std::shared_ptr<list_t> list;
         size_t ref_count;
@@ -33,7 +33,6 @@ private:
             list = std::make_shared<list_t>(*other.list); //TODO except
         }; //TODO except/noexcept?
         ~data_t() = default;
-
     };
 
     std::shared_ptr<data_t> data;
