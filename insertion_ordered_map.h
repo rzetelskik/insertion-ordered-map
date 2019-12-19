@@ -25,7 +25,11 @@ public:
     insertion_ordered_map &operator=(insertion_ordered_map other) {}; //TODO noexcept?
 
     bool insert(K const &k, V const &v) {}; //TODO noexcept?
-    void erase(K const &k) {}; //TODO noexcept?
+
+    void erase(K const &k) {
+
+    }; //TODO noexcept?
+
     void merge(insertion_ordered_map const &other) {}; //TODO noexcept?
     V &at(K const &k) {}; //TODO noexcept?
     V const &at(K const &k) const {}; //TODO noexcept?
