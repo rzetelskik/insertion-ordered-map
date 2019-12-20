@@ -50,7 +50,10 @@ BOOST_AUTO_TEST_CASE(copy_constructor) {
 BOOST_AUTO_TEST_CASE(copy_on_write) {
     insertion_ordered_map<int, int> aaa;
     BOOST_CHECK(aaa.insert(4, 5) && (aaa.size() == 1));
+    BOOST_CHECK(aaa.insert(6, 5) && (aaa.size() == 2));
     insertion_ordered_map<int, int> bbb(aaa);
-    BOOST_CHECK(aaa.insert(5, 5) && (aaa.size() == 2));
+    insertion_ordered_map<int, int> ccc(aaa);
+    BOOST_CHECK(aaa.insert(5, 5) && (aaa.size() == 3));
     BOOST_CHECK(!bbb.contains(5));
+    BOOST_CHECK(!ccc.contains(5));
 }

@@ -6,7 +6,7 @@
 #include <limits>
 #include <boost/exception/detail/shared_ptr.hpp>
 
-const static size_t unshareable_v = std::numeric_limits<size_t>::max();
+const static size_t unshareable = std::numeric_limits<size_t>::max();
 
 class lookup_error : std::exception {
     const char* what() const noexcept override {
@@ -38,24 +38,27 @@ private:
     std::shared_ptr<data_t> data;
 
     void prepare_to_modify(bool mark_unshareable) {
-        if (data->ref_count > 1 && data->ref_count != unshareable_v) {
+        if (data->ref_count > 1 && data->ref_count != unshareable) {
             data->ref_count--;
             data = std::make_shared<data_t>(*data); //TODO except
         }
-        data->ref_count = (mark_unshareable ? unshareable_v : 1);
+        if (mark_unshareable)
+            data->ref_count = unshareable;
     }
 
 public:
     insertion_ordered_map() : data(std::make_shared<data_t>()) {}; //TODO noexcept?
 
     insertion_ordered_map(insertion_ordered_map const &other) {
-        if (other.data->ref_count == unshareable_v) {
+        if (other.data->ref_count == unshareable) {
             data = std::make_shared<data_t>(*other.data); //TODO except
         } else {
             data = other.data;
             ++data->ref_count;
         }
     }; //TODO noexcept?
+
+    ~insertion_ordered_map() = default;
 
 //    insertion_ordered_map(insertion_ordered_map &&other) {}; //TODO move-constructor, noexcept?
 
