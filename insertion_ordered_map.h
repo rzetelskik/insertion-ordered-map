@@ -4,12 +4,12 @@
 #include <unordered_map>
 #include <list>
 #include <limits>
-#include <boost/exception/detail/shared_ptr.hpp>
+#include <memory>
 
 const static size_t unshareable = std::numeric_limits<size_t>::max();
 
 class lookup_error : std::exception {
-    [[nodiscard]] const char* what() const noexcept override {
+    [[nodiscard]] const char *what() const noexcept override {
         return "lookup_error";
     }
 };
@@ -28,12 +28,14 @@ private:
                 map->insert({it->first, it}); //TODO except?
             }
         }
+
     public: //TODO handle this
         std::shared_ptr<map_t> map;
         std::shared_ptr<list_t> list;
         size_t ref_count;
 
-        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()), ref_count(1) {}; //TODO except/noexcept?
+        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()),
+                   ref_count(1) {}; //TODO except/noexcept?
         data_t(data_t const &other) : ref_count(1) {
             list = std::make_shared<list_t>(*other.list); //TODO except
             map = std::make_shared<map_t>(); //TODO except
@@ -55,6 +57,44 @@ private:
     }
 
 public:
+    class iterator { //TODO nwm wyjebac to trzeba gdzies
+    private:
+        typename list_t::iterator it;
+    public:
+
+        iterator() = default;
+
+        explicit iterator(const typename list_t::iterator &listIt) {
+            it = listIt;
+        }
+
+        iterator(const iterator &newIt) {
+            if (it != newIt.it)
+                it = newIt.it;
+        }
+
+        pair_t &operator*() const {
+            return *it;
+        }
+
+        pair_t *operator->() const {
+            return &(*it);
+        }
+
+        iterator &operator++() {
+            ++it;
+            return *this;
+        }
+
+        bool operator==(const iterator &other) const {
+            return it == other.it;
+        }
+
+        bool operator!=(const iterator &other) const {
+            return it != other.it;
+        }
+    };
+
     insertion_ordered_map() : data(std::make_shared<data_t>()) {}; //TODO noexcept?
 
     insertion_ordered_map(insertion_ordered_map const &other) {
@@ -85,7 +125,7 @@ public:
             pair = *it_list;
             data->list->erase(it_list);
         } else {
-            pair = std::make_pair(k, v);
+            pair = {k, v};
         }
 
         try {
@@ -106,6 +146,7 @@ public:
         typename map_t::iterator it = data->map->find(k);
         if (it == data->map->end())
             throw lookup_error();
+
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
@@ -123,7 +164,7 @@ public:
     }; //TODO noexcept?
 
     V &at(K const &k) {
-        return const_cast<V&>(const_cast<const insertion_ordered_map*>(this)->at(k));
+        return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
     }; //TODO noexcept?
 
     V &operator[](K const &k) {}; //TODO noexcept?
@@ -142,9 +183,17 @@ public:
         data->map->clear();
     };
 
-    bool contains(K const &k) noexcept {
+    [[nodiscard]] bool contains(K const &k) noexcept {
         return (data->map->find(k) != data->map->end());
     };
+
+    iterator begin() {
+        return iterator(data->list->begin()); //TODO noexcept?
+    }
+
+    iterator end() {
+        return iterator(data->list->end()); //TODO noexcept?
+    }
 };
 
 #endif
