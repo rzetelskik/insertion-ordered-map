@@ -18,31 +18,34 @@ class lookup_error : std::exception {
 template<class K, class V, class Hash = std::hash<K>>
 class insertion_ordered_map {
 private:
-
     using pair_t = std::pair<K, V>;
     using list_t = std::list<pair_t>;
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
 
     class data_t {
     public: //TODO handle this
+
         std::shared_ptr<map_t> map;
         std::shared_ptr<list_t> list;
         size_t ref_count;
 
-        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()), ref_count(1) {}; //TODO except/noexcept?
-        data_t(data_t const &other) : ref_count(1) {
-            map = std::make_shared<map_t>(*other.map); //TODO except
-            list = std::make_shared<list_t>(*other.list); //TODO except
-        }; //TODO except/noexcept?
+        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()), ref_count(1) {}; //TODO EXCEPT ✔️
+
+        //TODO Co sie stanie jak zrobi sie map ale wyjebie list?
+        data_t(data_t const &other) : ref_count(1) { // TODO EXCEPT ✔️
+            map = std::make_shared<map_t>(*other.map);
+            list = std::make_shared<list_t>(*other.list);
+        };
+
         ~data_t() = default;
     };
 
 	std::shared_ptr<data_t> data;
 
-    void prepare_to_modify(bool mark_unshareable) {
+    void prepare_to_modify(bool mark_unshareable) { // TODO EXCEPT ✔️
         if (data->ref_count > 1 && data->ref_count != unshareable) {
             data->ref_count--;
-            data = std::make_shared<data_t>(*data); //TODO except
+            data = std::make_shared<data_t>(*data);
         }
         if (mark_unshareable)
             data->ref_count = unshareable;
@@ -75,7 +78,7 @@ public:
 			}
 		}
 
-		reference operator*() const
+		reference operator*() const //TODO except
 		{
 			return *it;
 		}
@@ -110,6 +113,8 @@ public:
             ++data->ref_count;
         }
     }; //TODO noexcept?
+
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
     ~insertion_ordered_map() = default;
 
@@ -150,7 +155,9 @@ public:
 
         typename map_t::iterator it = data->map->find(k);
         if (it == data->map->end())
+        {
             throw lookup_error();
+        }
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
