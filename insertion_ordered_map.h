@@ -9,7 +9,7 @@
 const static size_t unshareable = std::numeric_limits<size_t>::max();
 
 class lookup_error : std::exception {
-    const char* what() const noexcept override {
+    [[nodiscard]] const char* what() const noexcept override {
         return "lookup_error";
     }
 };
@@ -22,6 +22,12 @@ private:
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
 
     class data_t {
+    private:
+        void transform_list_to_map() { //TODO exceptions, lambda?
+            for (typename list_t::iterator it = list->begin(); it != list->end(); ++it) {
+                map->insert({it->first, it}); //TODO except?
+            }
+        }
     public: //TODO handle this
         std::shared_ptr<map_t> map;
         std::shared_ptr<list_t> list;
@@ -29,8 +35,9 @@ private:
 
         data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()), ref_count(1) {}; //TODO except/noexcept?
         data_t(data_t const &other) : ref_count(1) {
-            map = std::make_shared<map_t>(*other.map); //TODO except
             list = std::make_shared<list_t>(*other.list); //TODO except
+            map = std::make_shared<map_t>(); //TODO except
+            transform_list_to_map();
         }; //TODO except/noexcept?
         ~data_t() = default;
     };
@@ -41,6 +48,7 @@ private:
         if (data->ref_count > 1 && data->ref_count != unshareable) {
             data->ref_count--;
             data = std::make_shared<data_t>(*data); //TODO except
+//            data_t new_data = std::make_shared<data_t>(*data);
         }
         if (mark_unshareable)
             data->ref_count = unshareable;
@@ -103,20 +111,28 @@ public:
         data->list->erase(list_it);
     }; //TODO handle exceptions thrown by erase
 
-
     void merge(insertion_ordered_map const &other) {}; //TODO noexcept, copy on write?
 
-    V &at(K const &k) {}; //TODO noexcept?
+    V const &at(K const &k) const {
+        typename map_t::iterator it = data->map->find(k);
 
-    V const &at(K const &k) const {}; //TODO noexcept?
+        if (it == data->map->end())
+            throw lookup_error();
+
+        return it->second->second;
+    }; //TODO noexcept?
+
+    V &at(K const &k) {
+        return const_cast<V&>(const_cast<const insertion_ordered_map*>(this)->at(k));
+    }; //TODO noexcept?
 
     V &operator[](K const &k) {}; //TODO noexcept?
 
-    size_t size() const noexcept {
+    [[nodiscard]] size_t size() const noexcept {
         return data->list->size();
     };
 
-    bool empty() const noexcept {
+    [[nodiscard]] bool empty() const noexcept {
         return data->list->empty();
     };
 
@@ -129,29 +145,6 @@ public:
     bool contains(K const &k) noexcept {
         return (data->map->find(k) != data->map->end());
     };
-
 };
-
-//    iterator begin() const {
-//        return iterator(list.begin());
-//    }; //TODO noexcept?
-//    iterator end() const {}; //TODO noexcept?
-
-//    class iterator {
-//    private:
-//        typename list_t::iterator list_iterator;
-//    public:
-//        iterator() = default;
-//        explicit iterator(typename list_t::iterator const &elem) {
-//            list_iterator = elem;
-//        }
-//        iterator(iterator const &other) = default;
-//        iterator const &operator++() {
-//
-//        };
-//        bool operator==(iterator const &other) const {};
-//        bool operator!=(iterator const &other) const {};
-//        //TODO dereference
-//    };
 
 #endif
