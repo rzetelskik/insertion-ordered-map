@@ -89,41 +89,71 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(iterator)
 
-    BOOST_AUTO_TEST_CASE(iterator) {
-        insertion_ordered_map<int, int> iom;
-        insertion_ordered_map<int, int>::iterator it1;
+BOOST_AUTO_TEST_CASE(iterator) {
+    insertion_ordered_map<int, int> iom;
+    insertion_ordered_map<int, int>::iterator it1;
 
-        BOOST_CHECK(iom.insert(1, 2));
-        BOOST_CHECK(iom.size() == 1);
-        BOOST_CHECK(iom.insert(2, 3));
-        BOOST_CHECK(iom.size() == 2);
-        BOOST_CHECK(iom.insert(3, 4));
-        BOOST_CHECK(iom.size() == 3);
+    BOOST_CHECK(iom.insert(1, 2));
+    BOOST_CHECK(iom.size() == 1);
+    BOOST_CHECK(iom.insert(2, 3));
+    BOOST_CHECK(iom.size() == 2);
+    BOOST_CHECK(iom.insert(3, 4));
+    BOOST_CHECK(iom.size() == 3);
 
-        insertion_ordered_map<int, int>::iterator it2(iom.begin());
+    insertion_ordered_map<int, int>::iterator it2(iom.begin());
 
-        insertion_ordered_map<int, int>::iterator it3(it1);
+    insertion_ordered_map<int, int>::iterator it3(it1);
 
-        it3 = iom.end();
+    it3 = iom.end();
 
-        BOOST_CHECK(it2->first == 1);
-        BOOST_CHECK(it2->second == 2);
+    BOOST_CHECK(it2->first == 1);
+    BOOST_CHECK(it2->second == 2);
 
-        ++it2;
-        BOOST_CHECK(it2->first == 2);
-        BOOST_CHECK(it2->second == 3);
+    ++it2;
+    BOOST_CHECK(it2->first == 2);
+    BOOST_CHECK(it2->second == 3);
 
-        it1 = it2;
+    it1 = it2;
 
-        ++it2;
-        BOOST_CHECK(it1->first == 2);
-        BOOST_CHECK(it1->second == 3);
+    ++it2;
+    BOOST_CHECK(it1->first == 2);
+    BOOST_CHECK(it1->second == 3);
 
-        BOOST_CHECK(it2->first == 3);
-        BOOST_CHECK(it2->second == 4);
+    BOOST_CHECK(it2->first == 3);
+    BOOST_CHECK(it2->second == 4);
 
-        ++it2;
-        BOOST_CHECK(it2 == iom.end());
-    }
+    ++it2;
+    BOOST_CHECK(it2 == iom.end());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(indexing_operator)
+
+BOOST_AUTO_TEST_CASE(indexing_operator) {
+    insertion_ordered_map<int, std::string> iom;
+    BOOST_CHECK(iom.insert(1, "abc"));
+    BOOST_CHECK(iom.insert(2, "bcd"));
+    BOOST_CHECK(iom.insert(3, "def"));
+    BOOST_CHECK(iom[1] == "abc");
+    BOOST_CHECK(iom[2] == "bcd");
+    BOOST_CHECK(iom[4] == "");
+}
+
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(assignment_operator)
+
+BOOST_AUTO_TEST_CASE(assignmnent_operator_1) {
+    insertion_ordered_map<int, int> iom1;
+    insertion_ordered_map<int, int> iom2;
+    BOOST_CHECK(iom1.insert(1, 2));
+    BOOST_CHECK(iom1.insert(2, 3));
+    iom2 = iom1;
+    iom1.clear();
+    BOOST_CHECK(iom2.contains(1));
+    BOOST_CHECK(iom2.contains(2));
+}
 
 BOOST_AUTO_TEST_SUITE_END()

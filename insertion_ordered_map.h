@@ -37,8 +37,8 @@ private:
         data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()),
                    ref_count(1) {}; //TODO except/noexcept?
         data_t(data_t const &other) : ref_count(1) {
-            list = std::make_shared<list_t>(*other.list); //TODO except
-            map = std::make_shared<map_t>(); //TODO except
+            list = std::make_shared<list_t>(*other.list); //TODO except, unique_ptr
+            map = std::make_shared<map_t>(); //TODO except, unique_ptr
             transform_list_to_map();
         }; //TODO except/noexcept?
         ~data_t() = default;
@@ -50,7 +50,6 @@ private:
         if (data->ref_count > 1 && data->ref_count != unshareable) {
             data->ref_count--;
             data = std::make_shared<data_t>(*data); //TODO except
-//            data_t new_data = std::make_shared<data_t>(*data);
         }
         if (mark_unshareable)
             data->ref_count = unshareable;
@@ -64,13 +63,13 @@ public:
 
         iterator() = default;
 
-        explicit iterator(const typename list_t::iterator &listIt) {
-            it = listIt;
+        explicit iterator(const typename list_t::iterator &list_it) {
+            it = list_it;
         }
 
-        iterator(const iterator &newIt) {
-            if (it != newIt.it)
-                it = newIt.it;
+        iterator(const iterator &other_it) {
+            if (it != other_it.it)
+                it = other_it.it;
         }
 
         pair_t &operator*() const {
@@ -106,11 +105,18 @@ public:
         }
     }; //TODO noexcept?
 
-    ~insertion_ordered_map() = default;
+    ~insertion_ordered_map() {
+        --data->ref_count;
+    };
 
-//    insertion_ordered_map(insertion_ordered_map &&other) {}; //TODO move-constructor, noexcept?
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {} //TODO move-constructor, noexcept?
 
-    insertion_ordered_map &operator=(insertion_ordered_map other) {}; //TODO noexcept?
+    insertion_ordered_map &operator=(insertion_ordered_map other) {
+        if (this->data != other.data) { //TODO sprawdzic to
+            data = std::make_shared<data_t>(*other.data); //TODO except
+        }
+        return *this;
+    }; //TODO noexcept?
 
     bool insert(K const &k, V const &v) {
         prepare_to_modify(false);
@@ -157,7 +163,7 @@ public:
     V const &at(K const &k) const {
         typename map_t::iterator it = data->map->find(k);
 
-        if (it == data->map->end())
+        if (it == data->map->end()) //TODO check except
             throw lookup_error();
 
         return it->second->second;
@@ -167,7 +173,30 @@ public:
         return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
     }; //TODO noexcept?
 
-    V &operator[](K const &k) {}; //TODO noexcept?
+    V &operator[](K const &k) {
+        prepare_to_modify(true);
+
+        pair_t pair;
+        typename map_t::iterator it = data->map->find(k);
+
+        if (it == data->map->end()) {
+            try {
+                pair = {k, V()}; //TODO except, ma dzialac tylko jesli konstruktor bezparametrowy
+
+                data->list->push_back(pair);
+                typename list_t::iterator it_list = --data->list->end();
+                data->map->insert({k, it_list});
+
+                return it_list->second;
+            } catch (std::bad_alloc &e) {
+                if (!data->list->empty() && data->list->back() == pair)
+                    data->list->pop_back();
+                throw;
+            }
+        }
+
+        return it->second->second;
+    };
 
     [[nodiscard]] size_t size() const noexcept {
         return data->list->size();
