@@ -21,6 +21,7 @@ private:
     using list_t = std::list<pair_t>;
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
 
+
     class data_t {
     private:
         void transform_list_to_map() {
@@ -46,25 +47,38 @@ private:
     };
 
     std::shared_ptr<data_t> data;
+    using backup_data_t = std::pair<std::shared_ptr<data_t>, size_t>;
 
-    void prepare_to_modify(bool mark_unshareable) {
+    backup_data_t prepare_to_modify(bool mark_unshareable) {
+        backup_data_t backup = {data, data->ref_count};
+
         if (data->ref_count > 1 && data->ref_count != unshareable) {
             std::shared_ptr<data_t> prev_data = data;
 
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*data);
             prev_data->ref_count--;
         }
 
         data->ref_count = mark_unshareable ? unshareable : 1;
+
+        return backup;
     }
+
+    void restore_data(backup_data_t const &backup) {
+        backup.first->ref_count = backup.second;
+        data = backup.first;
+    }
+
 
 public:
     using iterator = typename list_t::const_iterator;
 
-    insertion_ordered_map() : data(std::make_shared<data_t>()) {};
+    insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
 
     insertion_ordered_map(insertion_ordered_map const &other) {
         if (other.data->ref_count == unshareable) {
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*other.data);
         } else {
             data = other.data;
@@ -72,7 +86,7 @@ public:
         }
     };
 
-    ~insertion_ordered_map() {
+    ~insertion_ordered_map() noexcept {
         --data->ref_count;
     };
 
@@ -80,35 +94,25 @@ public:
 
     insertion_ordered_map &operator=(insertion_ordered_map other) {
         if (this->data != other.data) { //TODO sprawdzic to
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*other.data);
         }
         return *this;
     };
 
-    /**
-     * prepare to modify moze wyjebac, ale to git, i tak ma silna gwarancje
-     * map->find ma silna gwarancje ✔️
-     * map->end ani list->erase nie throwuje
-     *
-     * jesli jebnie list->push_back to dowiemy sie o tym, bo lista bedzie pusta lub na jej koncu nie bedzie dodawanego elementu
-     * (bo jeblo wiec sie nie dodal) i wtedy nic nie trzeba robic
-     *
-     * jesli jebnie map->insert, to tez sie o tym dowiemy, bo na koncu listy bedzie dodawany element (bo lista nie jebla skoro jebla mapa)
-     * i wtedy usuniemy ten dodany element z konca lista
-     */
-    // FIXME WARNING !!!! WARNING !!!! Para jest usuwana z listy poza throwem. Jesli w try catchu wyjebie sie lista to ten element nie zostanie przywrocony
     bool insert(K const &k, V const &v) {
-        prepare_to_modify(false);
+        // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+        backup_data_t backup = prepare_to_modify(false);
 
         pair_t pair;
         bool unique = true;
         typename map_t::iterator it = data->map->find(k);
+        typename list_t::iterator it_list;
 
         if (it != data->map->end()) {
             unique = false;
-            typename list_t::iterator it_list = it->second;
+            it_list = it->second;
             pair = *it_list;
-            data->list->erase(it_list);
         } else {
             pair = {k, v};
         }
@@ -116,11 +120,14 @@ public:
         try {
             data->list->push_back(pair);
             data->map->insert({k, --data->list->end()});
+            if (!unique)
+                data->list->erase(it_list);
 
             return unique;
         } catch (std::bad_alloc &e) {
             if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
+            restore_data(backup);
             throw;
         }
     };
@@ -178,6 +185,7 @@ public:
      * wtedy dowiemy sie o tej zmianie, bo dodany element bedzie na koncu listy i go usuniemy.
      * wiec fajno.
      */
+
     V &operator[](K const &k) {
         prepare_to_modify(true);
 
