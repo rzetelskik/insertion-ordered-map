@@ -33,7 +33,6 @@ private:
         std::unique_ptr<map_t> map;
         std::unique_ptr<list_t> list;
         bool shareable;
-        bool backup_shareable;
 
         data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), shareable(true) {};
 
@@ -45,27 +44,24 @@ private:
         ~data_t() = default;
     };
 
+    using backup_data_t = std::pair<std::shared_ptr<data_t>, bool>;
     std::shared_ptr<data_t> data;
-    std::shared_ptr<data_t> backup;
 
-    void backup_data() {
-        data->backup_shareable = data->shareable;
-        backup = data;
-    }
-
-    void prepare_to_modify(bool mark_unshareable) {
-        backup_data();
+    backup_data_t prepare_to_modify(bool mark_unshareable) {
+        backup_data_t backup = {data, data->shareable};
 
         if (data.use_count() > SINGLE_USE_COUNT && data->shareable)
             // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*data);
 
         data->shareable = !mark_unshareable;
+
+        return backup;
     }
 
-    void restore_data() {
-        backup->shareable = backup->backup_shareable;
-        data = backup;
+    void restore_data(backup_data_t const& backup_data) {
+        data = backup_data.first;
+        data->shareable = backup_data.second;
     }
 
     void copy(insertion_ordered_map const &other) {
@@ -88,17 +84,15 @@ public:
 
     ~insertion_ordered_map() noexcept = default;
 
-    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(std::move(other.data)) {};
 
     insertion_ordered_map &operator=(insertion_ordered_map other) {
         copy(other);
         return *this;
     };
 
-
-
     bool insert(K const &k, V const &v) {
-        prepare_to_modify(false);
+        auto backup = prepare_to_modify(false);
 
         pair_t pair;
         bool duplicate = false;
@@ -125,8 +119,8 @@ public:
 
             return !duplicate;
         } catch (...) {
-            if (data != backup)
-                restore_data();
+            if (data != backup.first)
+                restore_data(backup);
             else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
             throw;
@@ -146,9 +140,9 @@ public:
     };
 
     void merge(insertion_ordered_map const &other) {
-        prepare_to_modify(false);
+        auto backup = prepare_to_modify(false);
 
-        auto data_cp = (data == backup) ? std::make_shared<data_t>(*data) : data;
+        auto data_cp = (data == backup.first) ? std::make_shared<data_t>(*data) : data;
 
         pair_t pair;
         bool duplicate;
@@ -176,7 +170,7 @@ public:
                     data_cp->map->insert({pair.first, new_list_it});
                 }
             } catch (...) {
-                restore_data();
+                restore_data(backup);
                 throw;
             }
         }
@@ -199,7 +193,7 @@ public:
 
     template<typename T = V, typename = typename std::enable_if<std::is_default_constructible<T>::value>::type>
     T &operator[](K const &k) {
-        prepare_to_modify(true);
+        auto backup = prepare_to_modify(true);
 
         pair_t pair;
         auto map_it = data->map->find(k);
@@ -215,8 +209,8 @@ public:
 
             return list_it->second;
         } catch (...) {
-            if (data != backup)
-                restore_data();
+            if (data != backup.first)
+                restore_data(backup);
             else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
             throw;
