@@ -5,6 +5,7 @@
 #include <list>
 #include <limits>
 #include <memory>
+#include <cassert>
 
 const static size_t unshareable = std::numeric_limits<size_t>::max();
 
@@ -20,7 +21,7 @@ private:
     using pair_t = std::pair<K, V>;
     using list_t = std::list<pair_t>;
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
-    
+
     class data_t {
     private:
         void fill_copy(data_t const &other) {
@@ -51,6 +52,7 @@ private:
 
     backup_data_t prepare_to_modify(bool mark_unshareable) {
         backup_data_t backup = {data, data->ref_count};
+
 
         if (data->ref_count > 1 && data->ref_count != unshareable) {
             std::shared_ptr<data_t> prev_data = data;
@@ -106,12 +108,12 @@ public:
         backup_data_t backup = prepare_to_modify(false);
 
         pair_t pair;
-        bool unique = true;
+        bool duplicate = false;
         typename map_t::iterator map_it = data->map->find(k);
         typename list_t::iterator list_it;
 
         if (map_it != data->map->end()) {
-            unique = false;
+            duplicate = true;
             list_it = map_it->second;
             pair = *list_it;
         } else {
@@ -119,13 +121,17 @@ public:
         }
 
         try {
-            data->list->push_back(pair);
-            data->map->insert({pair.first, --data->list->end()});
-            if (!unique)
-                data->list->erase(list_it);
+            auto new_list_it = data->list->insert(end(), pair);
 
-            return unique;
-        } catch (std::bad_alloc &e) {
+            if (duplicate) {
+                map_it->second = new_list_it;
+                data->list->erase(list_it);
+            } else {
+                data->map->insert({pair.first, new_list_it});
+            }
+
+            return !duplicate;
+        } catch (...) {
             if (data != backup.first)
                 restore_data(backup);
             else if (!data->list->empty() && data->list->back() == pair)
@@ -161,7 +167,7 @@ public:
             if (map_it != data_cp->map->end()) {
                 duplicate = true;
                 list_it = map_it->second;
-                pair = std::pair(*list_it);
+                pair = *list_it;
             } else {
                 duplicate = false;
                 pair = std::pair(*other_list_it);
@@ -170,9 +176,14 @@ public:
             try {
                 auto new_list_it = data_cp->list->insert(data_cp->list->end(), pair);
                 data_cp->map->insert({pair.first, new_list_it});
-                if (duplicate)
+
+                if (duplicate) {
+                    map_it->second = new_list_it;
                     data_cp->list->erase(list_it);
-            } catch (std::bad_alloc &e){
+                } else {
+                    data_cp->map->insert({pair.first, new_list_it});
+                }
+            } catch (...){
                 restore_data(backup);
                 throw;
             }
@@ -210,7 +221,7 @@ public:
             data->map->insert({k, it_list});
 
             return it_list->second;
-        } catch (std::bad_alloc &e) {
+        } catch (...) {
             if (data != backup.first)
                 restore_data(backup);
             else if (!data->list->empty() && data->list->back() == pair)
