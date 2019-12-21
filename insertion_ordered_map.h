@@ -271,7 +271,6 @@ public:
     iterator end() const noexcept {
         return iterator(data->list->end());
     }
-
 };
 
 #endif
