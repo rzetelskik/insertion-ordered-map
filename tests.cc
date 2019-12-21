@@ -157,3 +157,25 @@ BOOST_AUTO_TEST_CASE(assignmnent_operator_1) {
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+
+BOOST_AUTO_TEST_SUITE(merge)
+
+BOOST_AUTO_TEST_CASE(merge1) {
+    insertion_ordered_map<int, int> iom1;
+    insertion_ordered_map<int, int> iom2;
+    BOOST_CHECK(iom1.insert(1, 2));
+    BOOST_CHECK(iom1.insert(2, 3));
+    BOOST_CHECK(iom2.insert(1, 9));
+    BOOST_CHECK(iom2.insert(3, 4));
+    BOOST_CHECK_NO_THROW(iom1.merge(iom2));
+    for (auto it = iom1.begin(); it != iom1.end(); ++it) {
+        printf("iom1: %d : %d\n", it->first, it->second);
+    }
+    for (auto it = iom2.begin(); it != iom2.end(); ++it) {
+        printf("iom2: %d : %d\n", it->first, it->second);
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+

@@ -20,13 +20,13 @@ private:
     using pair_t = std::pair<K, V>;
     using list_t = std::list<pair_t>;
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
-
-
+    
     class data_t {
     private:
-        void transform_list_to_map() {
-            for (typename list_t::iterator it = list->begin(); it != list->end(); ++it) {
-                map->insert({it->first, it});
+        void fill_copy(data_t const &other) {
+            for (auto it = other.list->begin(); it != other.list->end(); ++it) {
+                auto list_it = list->insert(list->end(), std::pair(*it));
+                map->insert({list_it->first, list_it});
             }
         }
 
@@ -37,16 +37,16 @@ private:
 
         data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {};
 
-        data_t(data_t const &other) : ref_count(1) {
-            list = std::make_unique<list_t>(*other.list);
-            map = std::make_unique<map_t>();
-            transform_list_to_map();
+        data_t(data_t const &other) : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {
+            fill_copy(other);
         };
 
         ~data_t() = default;
+
     };
 
     std::shared_ptr<data_t> data;
+
     using backup_data_t = std::pair<std::shared_ptr<data_t>, size_t>;
 
     backup_data_t prepare_to_modify(bool mark_unshareable) {
@@ -70,6 +70,15 @@ private:
         data = backup.first;
     }
 
+    void copy(insertion_ordered_map const &other) {
+        if (other.data->ref_count == unshareable) {
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+            data = std::make_shared<data_t>(*other.data);
+        } else {
+            data = other.data;
+            ++data->ref_count;
+        }
+    }
 
 public:
     using iterator = typename list_t::const_iterator;
@@ -77,30 +86,18 @@ public:
     insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
 
     insertion_ordered_map(insertion_ordered_map const &other) {
-        if (other.data->ref_count == unshareable) {
-            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
-            data = std::make_shared<data_t>(*other.data);
-        } else {
-            data = other.data;
-            ++data->ref_count;
-        }
+        copy(other);
     };
 
     ~insertion_ordered_map() noexcept {
-        --data->ref_count;
+        if (data)
+            data->ref_count--;
     };
 
     insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
     insertion_ordered_map &operator=(insertion_ordered_map other) {
-        //TODO change to avoid code duplication
-        if (other.data->ref_count == unshareable) {
-            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
-            data = std::make_shared<data_t>(*other.data);
-        } else {
-            data = other.data;
-            ++data->ref_count;
-        }
+        copy(other);
         return *this;
     };
 
@@ -110,22 +107,22 @@ public:
 
         pair_t pair;
         bool unique = true;
-        typename map_t::iterator it = data->map->find(k);
-        typename list_t::iterator it_list;
+        typename map_t::iterator map_it = data->map->find(k);
+        typename list_t::iterator list_it;
 
-        if (it != data->map->end()) {
+        if (map_it != data->map->end()) {
             unique = false;
-            it_list = it->second;
-            pair = *it_list;
+            list_it = map_it->second;
+            pair = *list_it;
         } else {
             pair = {k, v};
         }
 
         try {
             data->list->push_back(pair);
-            data->map->insert({k, --data->list->end()});
+            data->map->insert({pair.first, --data->list->end()});
             if (!unique)
-                data->list->erase(it_list);
+                data->list->erase(list_it);
 
             return unique;
         } catch (std::bad_alloc &e) {
@@ -149,15 +146,40 @@ public:
         data->list->erase(list_it);
     };
 
-//    void merge(insertion_ordered_map const &other)
-//    {
-//        if (this->data != other->data)
-//        {
-//            insertion_ordered_map temp(this);
-//            //TODO to be continued
-//
-//        }
-//    }; //TODO noexcept, copy on write?
+    void merge(insertion_ordered_map const &other) {
+        backup_data_t backup = prepare_to_modify(false);
+
+        std::shared_ptr<data_t> data_cp = (data == backup.first) ? std::make_shared<data_t>(*data) : data;
+
+        pair_t pair;
+        bool duplicate;
+        typename list_t::iterator list_it;
+
+        for (auto other_list_it = other.begin(); other_list_it != other.end(); ++other_list_it) {
+            auto map_it = data_cp->map->find(other_list_it->first);
+
+            if (map_it != data_cp->map->end()) {
+                duplicate = true;
+                list_it = map_it->second;
+                pair = std::pair(*list_it);
+            } else {
+                duplicate = false;
+                pair = std::pair(*other_list_it);
+            }
+
+            try {
+                auto new_list_it = data_cp->list->insert(data_cp->list->end(), pair);
+                data_cp->map->insert({pair.first, new_list_it});
+                if (duplicate)
+                    data_cp->list->erase(list_it);
+            } catch (std::bad_alloc &e){
+                restore_data(backup);
+                throw;
+            }
+        }
+
+        data = data_cp;
+    };
 
     V const &at(K const &k) const {
         typename map_t::iterator it = data->map->find(k);
@@ -206,7 +228,7 @@ public:
     };
 
     void clear() {
-        prepare_to_modify(false);
+        prepare_to_modify(false); //TODO
         data->list->clear();
         data->map->clear();
     };
