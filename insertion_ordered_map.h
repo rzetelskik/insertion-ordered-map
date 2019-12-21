@@ -21,134 +21,102 @@ private:
     using list_t = std::list<pair_t>;
     using map_t = std::unordered_map<const K, typename list_t::iterator, Hash>;
 
+
     class data_t {
     private:
-        /**
-         * to jebnie, trzeba naprawic.
-         */
-        void transform_list_to_map() { //TODO exceptions, lambda?
+        void transform_list_to_map() {
             for (typename list_t::iterator it = list->begin(); it != list->end(); ++it) {
                 map->insert({it->first, it});
             }
         }
 
     public: //TODO handle this
-        std::shared_ptr<map_t> map;
-        std::shared_ptr<list_t> list;
+        std::unique_ptr<map_t> map;
+        std::unique_ptr<list_t> list;
         size_t ref_count;
 
-        /**
-         * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-         */
-        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()),
-                   ref_count(1) {}; //TODO except/noexcept?
-        /**
-         * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-         */
-        data_t(data_t const &other) : ref_count(1) {
-            list = std::make_shared<list_t>(*other.list); //TODO except, unique_ptr
-            map = std::make_shared<map_t>(); //TODO except, unique_ptr
-            transform_list_to_map();
-        }; //TODO except/noexcept?
+        data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {};
 
-        /**
-         * nope, nic nie throwuje. bezpieczny.
-         */
+        data_t(data_t const &other) : ref_count(1) {
+            list = std::make_unique<list_t>(*other.list);
+            map = std::make_unique<map_t>();
+            transform_list_to_map();
+        };
+
         ~data_t() = default;
     };
 
     std::shared_ptr<data_t> data;
+    using backup_data_t = std::pair<std::shared_ptr<data_t>, size_t>;
 
+    backup_data_t prepare_to_modify(bool mark_unshareable) {
+        backup_data_t backup = {data, data->ref_count};
 
-    /**
-     * Jak sie make_shared wyjebie to znaczy ze wczesniej musial sie zdecrementowac ref_cout,
-     * wiec w razie wyjatku spowrotem go incrementuje i throwuje wyjatek wyzej
-     */
-    void prepare_to_modify(bool mark_unshareable) {
-        try
-        {
-            if (data->ref_count > 1 && data->ref_count != unshareable) {
-                data->ref_count--;
-                data = std::make_shared<data_t>(*data); //TODO except
-            }
-        }
-        catch (std::bad_alloc &e)
-        {
-            data->ref_count++;
-            throw;
+        if (data->ref_count > 1 && data->ref_count != unshareable) {
+            std::shared_ptr<data_t> prev_data = data;
+
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+            data = std::make_shared<data_t>(*data);
+            prev_data->ref_count--;
         }
 
-        if (mark_unshareable)
-            data->ref_count = unshareable;
+        data->ref_count = mark_unshareable ? unshareable : 1;
+
+        return backup;
     }
 
-public:
+    void restore_data(backup_data_t const &backup) {
+        backup.first->ref_count = backup.second;
+        data = backup.first;
+    }
 
-    /**
-     * nwm czy iterator cos throwuje, obstawiam ze nawet jesli to ma silna gwarancje
-     */
+
+public:
     using iterator = typename list_t::const_iterator;
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
-    insertion_ordered_map() : data(std::make_shared<data_t>()) {};
+    insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
     insertion_ordered_map(insertion_ordered_map const &other) {
         if (other.data->ref_count == unshareable) {
-            data = std::make_shared<data_t>(*other.data); //TODO except
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+            data = std::make_shared<data_t>(*other.data);
         } else {
             data = other.data;
             ++data->ref_count;
         }
     };
 
-    /**
-     * to zdecydowanie nic nie throwuje.
-     */
-    ~insertion_ordered_map() {
+    ~insertion_ordered_map() noexcept {
         --data->ref_count;
     };
 
-    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {} //TODO move-constructor, noexcept?
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
     insertion_ordered_map &operator=(insertion_ordered_map other) {
-        if (this->data != other.data) { //TODO sprawdzic to
-            data = std::make_shared<data_t>(*other.data); //TODO except
+        //TODO change to avoid code duplication
+        if (other.data->ref_count == unshareable) {
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+            data = std::make_shared<data_t>(*other.data);
+        } else {
+            data = other.data;
+            ++data->ref_count;
         }
         return *this;
     };
 
-    /**
-     * prepare to modify moze wyjebac, ale to git, i tak ma silna gwarancje
-     * map->find ma silna gwarancje ✔️
-     * map->end ani list->erase nie throwuje
-     *
-     * jesli jebnie list->push_back to dowiemy sie o tym, bo lista bedzie pusta lub na jej koncu nie bedzie dodawanego elementu
-     * (bo jeblo wiec sie nie dodal) i wtedy nic nie trzeba robic
-     *
-     * jesli jebnie map->insert, to tez sie o tym dowiemy, bo na koncu listy bedzie dodawany element (bo lista nie jebla skoro jebla mapa)
-     * i wtedy usuniemy ten dodany element z konca lista
-     */
-     // FIXME WARNING !!!! WARNING !!!! Para jest usuwana z listy poza throwem. Jesli w try catchu wyjebie sie lista to ten element nie zostanie przywrocony
     bool insert(K const &k, V const &v) {
-        prepare_to_modify(false);
+        // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+        backup_data_t backup = prepare_to_modify(false);
 
         pair_t pair;
         bool unique = true;
         typename map_t::iterator it = data->map->find(k);
+        typename list_t::iterator it_list;
 
         if (it != data->map->end()) {
             unique = false;
-            typename list_t::iterator it_list = it->second;
+            it_list = it->second;
             pair = *it_list;
-            data->list->erase(it_list);
         } else {
             pair = {k, v};
         }
@@ -156,25 +124,21 @@ public:
         try {
             data->list->push_back(pair);
             data->map->insert({k, --data->list->end()});
+            if (!unique)
+                data->list->erase(it_list);
 
             return unique;
         } catch (std::bad_alloc &e) {
-            if (!data->list->empty() && data->list->back() == pair)
+            if (data != backup.first)
+                restore_data(backup);
+            else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
             throw;
         }
     };
 
-    /**
-     * prepare_to_modify moze jebnac i niech jebnie
-     * map->find ma silna gwarancje (a silna + no_throw = silna)
-     * list::erase nie throwuje (w najgorszym przypadku undefined behaviour ale na to wplywu nie mamy)
-     * map::erase moze jebnac ale tylko przez comparision object kontenera (ale co znaczy hmmm), w pozostalych przypadkach no-throw
-     * zostaje lookup_error ✔️
-     */
-     //TODO jak wyzej, kiedy moze jebnac comparision object kontenera w naszym przypadku
     void erase(K const &k) {
-        prepare_to_modify(false);
+        backup_data_t backup = prepare_to_modify(false);
 
         typename map_t::iterator it = data->map->find(k);
         if (it == data->map->end())
@@ -183,21 +147,18 @@ public:
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
-    }; //TODO handle exceptions thrown by erase
+    };
 
-    void merge(insertion_ordered_map const &other)
-    {
-        if (this->data != other->data)
-        {
-            insertion_ordered_map temp(this);
-            //TODO to be continued
+//    void merge(insertion_ordered_map const &other)
+//    {
+//        if (this->data != other->data)
+//        {
+//            insertion_ordered_map temp(this);
+//            //TODO to be continued
+//
+//        }
+//    }; //TODO noexcept, copy on write?
 
-        }
-    }; //TODO noexcept, copy on write?
-
-    /**
-     * find nie throwuje, end tez nie, wiec wyjebac moze tylko lookup_error
-     */
     V const &at(K const &k) const {
         typename map_t::iterator it = data->map->find(k);
 
@@ -207,40 +168,28 @@ public:
         return it->second->second;
     };
 
-    /**
-     * Nie mam pojecia co sie tutaj dzieje xd
-     */
     V &at(K const &k) {
-        return const_cast<V &>(const_cast<const insertion_ordered_map*>(this)->at(k));
-    }; //TODO noexcept?
+        return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
+    };
 
-    /**
-     * Jak jebnie prepare_to_modify to trudno, tak ma byc
-     * map->find ma silna gwarancje
-     * map->end nie throwuje
-     * jak list->push_back jebnie, to nic sie nie zmodyfikuje
-     *
-     * jak map->insert jebnie, to znaczy, ze do listy cos wczesniej zostalo dodane
-     * wtedy dowiemy sie o tej zmianie, bo dodany element bedzie na koncu listy i go usuniemy.
-     * wiec fajno.
-     */
     V &operator[](K const &k) {
-        prepare_to_modify(true);
+        backup_data_t backup = prepare_to_modify(true);
 
         pair_t pair;
         typename map_t::iterator it = data->map->find(k);
 
         if (it == data->map->end()) {
+            pair = {k, V()};
             try {
-                pair = {k, V()}; //TODO except, ma dzialac tylko jesli konstruktor bezparametrowy
-
                 data->list->push_back(pair);
                 typename list_t::iterator it_list = --data->list->end();
                 data->map->insert({k, it_list});
 
                 return it_list->second;
             } catch (std::bad_alloc &e) {
-                if (!data->list->empty() && data->list->back() == pair)
+                if (data != backup.first)
+                    restore_data(backup);
+                else if (!data->list->empty() && data->list->back() == pair)
                     data->list->pop_back();
                 throw;
             }
@@ -257,10 +206,6 @@ public:
         return data->list->empty();
     };
 
-    /**
-     * Tutaj jak prepare_to_modify jebnie to raczej spoko, bo uzytkownik dostanie info
-     * a clear nie throwuje
-     */
     void clear() {
         prepare_to_modify(false);
         data->list->clear();
@@ -278,6 +223,7 @@ public:
     iterator end() const noexcept {
         return iterator(data->list->end());
     }
+
 };
 
 #endif
