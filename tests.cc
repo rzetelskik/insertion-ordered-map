@@ -173,3 +173,24 @@ BOOST_AUTO_TEST_CASE(merge1) {
 
 BOOST_AUTO_TEST_SUITE_END()
 
+BOOST_AUTO_TEST_SUITE(sfinae)
+
+class Testowa {
+private:
+    int v;
+public:
+    Testowa() = delete;
+    explicit Testowa(int a) { v = a; };
+};
+
+BOOST_AUTO_TEST_CASE(sfinae) {
+    insertion_ordered_map<int, int> iom1;
+    insertion_ordered_map<int, Testowa> iom2;
+    // Should compile!
+    BOOST_CHECK(iom1[3] == 0);
+////     Should not compile!
+//    BOOST_CHECK(iom2[1] == 0);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+

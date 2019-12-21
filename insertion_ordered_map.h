@@ -197,7 +197,8 @@ public:
         return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
     };
 
-    V &operator[](K const &k) {
+    template<typename T = V, typename = typename std::enable_if<std::is_default_constructible<T>::value>::type>
+    T &operator[](K const &k) {
         prepare_to_modify(true);
 
         pair_t pair;
@@ -206,7 +207,7 @@ public:
         if (map_it != data->map->end())
             return map_it->second->second;
 
-        pair = {k, V()};
+        pair = {k, T()};
 
         try {
             auto list_it = data->list->insert(end(), pair);
