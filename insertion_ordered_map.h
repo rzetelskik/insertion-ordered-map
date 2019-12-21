@@ -70,7 +70,7 @@ public:
     /*
      * Throws an exception in case any of its attributes' constructors do.
      */
-    insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
+    insertion_ordered_map() : data(std::make_shared<data_t>()) {};
 
     /*
      * Throws an exception in case any of its attributes' constructors do.
@@ -100,7 +100,7 @@ public:
      * the list, the element is removed from the list. In any case of failure, the structure is unchanged.
      */
     bool insert(K const &k, V const &v) {
-        // The data structure is copied (only if neccessary) and its original structure backed up.
+        // The data structure is copied (only if necessary) and its original structure backed up.
         auto backup = prepare_to_modify(false);
 
         pair_t pair;
@@ -158,7 +158,7 @@ public:
      * original condition and remains unchanged.
      */
     void merge(insertion_ordered_map const &other) {
-        // The data structure is copied (only if neccessary) and its original structure backed up.
+        // The data structure is copied (only if necessary) and its original structure backed up.
         auto backup = prepare_to_modify(false);
 
         // In case the structure hasn't been copied by copy-on-write, it is now.
