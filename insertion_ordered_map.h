@@ -23,104 +23,64 @@ private:
 
     class data_t {
     private:
-        /**
-         * to jebnie, trzeba naprawic.
-         */
-        void transform_list_to_map() { //TODO exceptions, lambda?
+        void transform_list_to_map() {
             for (typename list_t::iterator it = list->begin(); it != list->end(); ++it) {
                 map->insert({it->first, it});
             }
         }
 
     public: //TODO handle this
-        std::shared_ptr<map_t> map;
-        std::shared_ptr<list_t> list;
+        std::unique_ptr<map_t> map;
+        std::unique_ptr<list_t> list;
         size_t ref_count;
 
-        /**
-         * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-         */
-        data_t() : map(std::make_shared<map_t>()), list(std::make_shared<list_t>()),
-                   ref_count(1) {}; //TODO except/noexcept?
-        /**
-         * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-         */
-        data_t(data_t const &other) : ref_count(1) {
-            list = std::make_shared<list_t>(*other.list); //TODO except, unique_ptr
-            map = std::make_shared<map_t>(); //TODO except, unique_ptr
-            transform_list_to_map();
-        }; //TODO except/noexcept?
+        data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {};
 
-        /**
-         * nope, nic nie throwuje. bezpieczny.
-         */
+        data_t(data_t const &other) : ref_count(1) {
+            list = std::make_unique<list_t>(*other.list);
+            map = std::make_unique<map_t>();
+            transform_list_to_map();
+        };
+
         ~data_t() = default;
     };
 
     std::shared_ptr<data_t> data;
 
-
-    /**
-     * Jak sie make_shared wyjebie to znaczy ze wczesniej musial sie zdecrementowac ref_cout,
-     * wiec w razie wyjatku spowrotem go incrementuje i throwuje wyjatek wyzej
-     */
     void prepare_to_modify(bool mark_unshareable) {
-        try
-        {
-            if (data->ref_count > 1 && data->ref_count != unshareable) {
-                data->ref_count--;
-                data = std::make_shared<data_t>(*data); //TODO except
-            }
-        }
-        catch (std::bad_alloc &e)
-        {
-            data->ref_count++;
-            throw;
+        if (data->ref_count > 1 && data->ref_count != unshareable) {
+            std::shared_ptr<data_t> prev_data = data;
+
+            data = std::make_shared<data_t>(*data);
+            prev_data->ref_count--;
         }
 
-        if (mark_unshareable)
-            data->ref_count = unshareable;
+        data->ref_count = mark_unshareable ? unshareable : 1;
     }
 
 public:
-
-    /**
-     * nwm czy iterator cos throwuje, obstawiam ze nawet jesli to ma silna gwarancje
-     */
     using iterator = typename list_t::const_iterator;
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
     insertion_ordered_map() : data(std::make_shared<data_t>()) {};
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
     insertion_ordered_map(insertion_ordered_map const &other) {
         if (other.data->ref_count == unshareable) {
-            data = std::make_shared<data_t>(*other.data); //TODO except
+            data = std::make_shared<data_t>(*other.data);
         } else {
             data = other.data;
             ++data->ref_count;
         }
     };
 
-    /**
-     * to zdecydowanie nic nie throwuje.
-     */
     ~insertion_ordered_map() {
         --data->ref_count;
     };
 
-    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {} //TODO move-constructor, noexcept?
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
-    /**
-     * make_shared moze throwowac ale nic nie zmieni, wiec wciaz silna gwarancja ✔️
-     */
     insertion_ordered_map &operator=(insertion_ordered_map other) {
         if (this->data != other.data) { //TODO sprawdzic to
-            data = std::make_shared<data_t>(*other.data); //TODO except
+            data = std::make_shared<data_t>(*other.data);
         }
         return *this;
     };
@@ -136,7 +96,7 @@ public:
      * jesli jebnie map->insert, to tez sie o tym dowiemy, bo na koncu listy bedzie dodawany element (bo lista nie jebla skoro jebla mapa)
      * i wtedy usuniemy ten dodany element z konca lista
      */
-     // FIXME WARNING !!!! WARNING !!!! Para jest usuwana z listy poza throwem. Jesli w try catchu wyjebie sie lista to ten element nie zostanie przywrocony
+    // FIXME WARNING !!!! WARNING !!!! Para jest usuwana z listy poza throwem. Jesli w try catchu wyjebie sie lista to ten element nie zostanie przywrocony
     bool insert(K const &k, V const &v) {
         prepare_to_modify(false);
 
@@ -172,7 +132,7 @@ public:
      * map::erase moze jebnac ale tylko przez comparision object kontenera (ale co znaczy hmmm), w pozostalych przypadkach no-throw
      * zostaje lookup_error ✔️
      */
-     //TODO jak wyzej, kiedy moze jebnac comparision object kontenera w naszym przypadku
+    //TODO jak wyzej, kiedy moze jebnac comparision object kontenera w naszym przypadku
     void erase(K const &k) {
         prepare_to_modify(false);
 
@@ -185,19 +145,16 @@ public:
         data->list->erase(list_it);
     }; //TODO handle exceptions thrown by erase
 
-    void merge(insertion_ordered_map const &other)
-    {
-        if (this->data != other->data)
-        {
-            insertion_ordered_map temp(this);
-            //TODO to be continued
+//    void merge(insertion_ordered_map const &other)
+//    {
+//        if (this->data != other->data)
+//        {
+//            insertion_ordered_map temp(this);
+//            //TODO to be continued
+//
+//        }
+//    }; //TODO noexcept, copy on write?
 
-        }
-    }; //TODO noexcept, copy on write?
-
-    /**
-     * find nie throwuje, end tez nie, wiec wyjebac moze tylko lookup_error
-     */
     V const &at(K const &k) const {
         typename map_t::iterator it = data->map->find(k);
 
@@ -207,12 +164,9 @@ public:
         return it->second->second;
     };
 
-    /**
-     * Nie mam pojecia co sie tutaj dzieje xd
-     */
     V &at(K const &k) {
-        return const_cast<V &>(const_cast<const insertion_ordered_map*>(this)->at(k));
-    }; //TODO noexcept?
+        return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
+    };
 
     /**
      * Jak jebnie prepare_to_modify to trudno, tak ma byc
@@ -257,10 +211,6 @@ public:
         return data->list->empty();
     };
 
-    /**
-     * Tutaj jak prepare_to_modify jebnie to raczej spoko, bo uzytkownik dostanie info
-     * a clear nie throwuje
-     */
     void clear() {
         prepare_to_modify(false);
         data->list->clear();
