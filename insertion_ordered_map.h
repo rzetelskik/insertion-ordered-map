@@ -93,9 +93,13 @@ public:
     insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
     insertion_ordered_map &operator=(insertion_ordered_map other) {
-        if (this->data != other.data) { //TODO sprawdzic to
+        //TODO change to avoid code duplication
+        if (other.data->ref_count == unshareable) {
             // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*other.data);
+        } else {
+            data = other.data;
+            ++data->ref_count;
         }
         return *this;
     };
@@ -133,16 +137,8 @@ public:
         }
     };
 
-    /**
-     * prepare_to_modify moze jebnac i niech jebnie
-     * map->find ma silna gwarancje (a silna + no_throw = silna)
-     * list::erase nie throwuje (w najgorszym przypadku undefined behaviour ale na to wplywu nie mamy)
-     * map::erase moze jebnac ale tylko przez comparision object kontenera (ale co znaczy hmmm), w pozostalych przypadkach no-throw
-     * zostaje lookup_error ✔️
-     */
-    //TODO jak wyzej, kiedy moze jebnac comparision object kontenera w naszym przypadku
     void erase(K const &k) {
-        prepare_to_modify(false);
+        backup_data_t backup = prepare_to_modify(false);
 
         typename map_t::iterator it = data->map->find(k);
         if (it == data->map->end())
@@ -151,7 +147,7 @@ public:
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
-    }; //TODO handle exceptions thrown by erase
+    };
 
 //    void merge(insertion_ordered_map const &other)
 //    {
@@ -176,34 +172,24 @@ public:
         return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
     };
 
-    /**
-     * Jak jebnie prepare_to_modify to trudno, tak ma byc
-     * map->find ma silna gwarancje
-     * map->end nie throwuje
-     * jak list->push_back jebnie, to nic sie nie zmodyfikuje
-     *
-     * jak map->insert jebnie, to znaczy, ze do listy cos wczesniej zostalo dodane
-     * wtedy dowiemy sie o tej zmianie, bo dodany element bedzie na koncu listy i go usuniemy.
-     * wiec fajno.
-     */
-
     V &operator[](K const &k) {
-        prepare_to_modify(true);
+        backup_data_t backup = prepare_to_modify(true);
 
         pair_t pair;
         typename map_t::iterator it = data->map->find(k);
 
         if (it == data->map->end()) {
+            pair = {k, V()};
             try {
-                pair = {k, V()}; //TODO except, ma dzialac tylko jesli konstruktor bezparametrowy
-
                 data->list->push_back(pair);
                 typename list_t::iterator it_list = --data->list->end();
                 data->map->insert({k, it_list});
 
                 return it_list->second;
             } catch (std::bad_alloc &e) {
-                if (!data->list->empty() && data->list->back() == pair)
+                if (data != backup.first)
+                    restore_data(backup);
+                else if (!data->list->empty() && data->list->back() == pair)
                     data->list->pop_back();
                 throw;
             }
@@ -237,6 +223,7 @@ public:
     iterator end() const noexcept {
         return iterator(data->list->end());
     }
+
 };
 
 #endif
