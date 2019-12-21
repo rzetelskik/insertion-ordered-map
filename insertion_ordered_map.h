@@ -64,30 +64,26 @@ private:
         data->shareable = backup_data.second;
     }
 
-    void copy(insertion_ordered_map const &other) {
-        if (other.data->shareable) {
-            data = other.data;
-        } else {
-            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
-            data = std::make_shared<data_t>(*other.data);
-        }
-    }
-
 public:
     using iterator = typename list_t::const_iterator;
 
     insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
 
     insertion_ordered_map(insertion_ordered_map const &other) {
-        copy(other);
+        if (other.data->shareable) {
+            data = other.data;
+        } else {
+            // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
+            data = std::make_shared<data_t>(*other.data);
+        }
     };
 
     ~insertion_ordered_map() noexcept = default;
 
-    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(std::move(other.data)) {};
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept = default;
 
     insertion_ordered_map &operator=(insertion_ordered_map other) {
-        copy(other);
+        data.swap(other.data);
         return *this;
     };
 
