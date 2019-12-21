@@ -157,7 +157,7 @@ public:
                 pair = *list_it;
             } else {
                 duplicate = false;
-                pair = {};
+                pair = std::pair(*other_list_it);
             }
 
             try {
