@@ -143,12 +143,12 @@ public:
         pair_t pair;
         bool unique = true;
         typename map_t::iterator it = data->map->find(k);
+        typename list_t::iterator it_list;
 
         if (it != data->map->end()) {
             unique = false;
-            typename list_t::iterator it_list = it->second;
+            it_list = it->second;
             pair = *it_list;
-            data->list->erase(it_list);
         } else {
             pair = {k, v};
         }
@@ -156,6 +156,10 @@ public:
         try {
             data->list->push_back(pair);
             data->map->insert({k, --data->list->end()});
+
+            if (!unique) {
+                data->list->erase(it_list);
+            }
 
             return unique;
         } catch (std::bad_alloc &e) {
