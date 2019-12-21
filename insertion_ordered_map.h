@@ -7,7 +7,7 @@
 #include <memory>
 #include <cassert>
 
-const static size_t unshareable = std::numeric_limits<size_t>::max();
+static const long SINGLE_USE_COUNT = 2;
 
 class lookup_error : std::exception {
     [[nodiscard]] const char *what() const noexcept override {
@@ -34,11 +34,12 @@ private:
     public: //TODO handle this
         std::unique_ptr<map_t> map;
         std::unique_ptr<list_t> list;
-        size_t ref_count;
+        bool shareable;
 
-        data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {};
+        data_t() : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), shareable(true) {};
 
-        data_t(data_t const &other) : map(std::make_unique<map_t>()), list(std::make_unique<list_t>()), ref_count(1) {
+        data_t(data_t const &other) : map(std::make_unique<map_t>()),
+                list(std::make_unique<list_t>()), shareable(true) {
             fill_copy(other);
         };
 
@@ -46,39 +47,32 @@ private:
 
     };
 
+    using backup_data_t = std::pair<std::shared_ptr<data_t>, bool>;
+
     std::shared_ptr<data_t> data;
+    std::shared_ptr<data_t> backup_data;
 
-    using backup_data_t = std::pair<std::shared_ptr<data_t>, size_t>;
+    void prepare_to_modify(bool mark_unshareable) {
+        backup_data = data;
 
-    backup_data_t prepare_to_modify(bool mark_unshareable) {
-        backup_data_t backup = {data, data->ref_count};
-
-
-        if (data->ref_count > 1 && data->ref_count != unshareable) {
-            std::shared_ptr<data_t> prev_data = data;
-
+        //
+        if (data.use_count() > SINGLE_USE_COUNT && data->shareable)
             // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*data);
-            prev_data->ref_count--;
-        }
 
-        data->ref_count = mark_unshareable ? unshareable : 1;
-
-        return backup;
+        data->shareable = !mark_unshareable;
     }
 
-    void restore_data(backup_data_t const &backup) {
-        backup.first->ref_count = backup.second;
-        data = backup.first;
+    void restore_data() {
+        data = backup_data;
     }
 
     void copy(insertion_ordered_map const &other) {
-        if (other.data->ref_count == unshareable) {
+        if (other.data->shareable) {
+            data = other.data;
+        } else {
             // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
             data = std::make_shared<data_t>(*other.data);
-        } else {
-            data = other.data;
-            ++data->ref_count;
         }
     }
 
@@ -91,10 +85,7 @@ public:
         copy(other);
     };
 
-    ~insertion_ordered_map() noexcept {
-        if (data)
-            data->ref_count--;
-    };
+    ~insertion_ordered_map() noexcept = default;
 
     insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(move(other.data)) {}
 
@@ -105,7 +96,7 @@ public:
 
     bool insert(K const &k, V const &v) {
         // Throws std::bad_alloc in case of memory allocation error and structure remains unchanged.
-        backup_data_t backup = prepare_to_modify(false);
+        prepare_to_modify(false);
 
         pair_t pair;
         bool duplicate = false;
@@ -132,8 +123,8 @@ public:
 
             return !duplicate;
         } catch (...) {
-            if (data != backup.first)
-                restore_data(backup);
+            if (data != backup_data)
+                restore_data();
             else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
             throw;
@@ -141,21 +132,21 @@ public:
     };
 
     void erase(K const &k) {
-        backup_data_t backup = prepare_to_modify(false);
+        prepare_to_modify(false);
 
-        typename map_t::iterator it = data->map->find(k);
-        if (it == data->map->end())
+        auto map_it = data->map->find(k);
+        if (map_it == data->map->end())
             throw lookup_error();
 
-        typename list_t::iterator list_it = it->second;
-        data->map->erase(it);
+        auto list_it = map_it->second;
+        data->map->erase(map_it);
         data->list->erase(list_it);
     };
 
     void merge(insertion_ordered_map const &other) {
-        backup_data_t backup = prepare_to_modify(false);
+        prepare_to_modify(false);
 
-        std::shared_ptr<data_t> data_cp = (data == backup.first) ? std::make_shared<data_t>(*data) : data;
+        auto data_cp = (data == backup_data) ? std::make_shared<data_t>(*data) : data;
 
         pair_t pair;
         bool duplicate;
@@ -183,8 +174,8 @@ public:
                 } else {
                     data_cp->map->insert({pair.first, new_list_it});
                 }
-            } catch (...){
-                restore_data(backup);
+            } catch (...) {
+                restore_data();
                 throw;
             }
         }
@@ -193,12 +184,12 @@ public:
     };
 
     V const &at(K const &k) const {
-        typename map_t::iterator it = data->map->find(k);
+        auto map_it = data->map->find(k);
 
-        if (it == data->map->end())
+        if (map_it == data->map->end())
             throw lookup_error();
 
-        return it->second->second;
+        return map_it->second->second;
     };
 
     V &at(K const &k) {
@@ -206,24 +197,24 @@ public:
     };
 
     V &operator[](K const &k) {
-        backup_data_t backup = prepare_to_modify(true);
+        prepare_to_modify(true);
 
         pair_t pair;
-        typename map_t::iterator it = data->map->find(k);
+        auto map_it = data->map->find(k);
 
-        if (it != data->map->end())
-            return it->second->second;
+        if (map_it != data->map->end())
+            return map_it->second->second;
 
         pair = {k, V()};
-        try {
-            data->list->push_back(pair);
-            typename list_t::iterator it_list = --data->list->end();
-            data->map->insert({k, it_list});
 
-            return it_list->second;
+        try {
+            auto list_it = data->list->insert(end(), pair);
+            data->map->insert({k, list_it});
+
+            return list_it->second;
         } catch (...) {
-            if (data != backup.first)
-                restore_data(backup);
+            if (data != backup_data)
+                restore_data();
             else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
             throw;
