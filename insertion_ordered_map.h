@@ -125,9 +125,10 @@ public:
 
             return unique;
         } catch (std::bad_alloc &e) {
-            if (!data->list->empty() && data->list->back() == pair)
+            if (data != backup.first)
+                restore_data(backup);
+            else if (!data->list->empty() && data->list->back() == pair)
                 data->list->pop_back();
-            restore_data(backup);
             throw;
         }
     };
