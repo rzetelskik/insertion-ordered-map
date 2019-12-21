@@ -67,8 +67,14 @@ private:
 public:
     using iterator = typename list_t::const_iterator;
 
+    /*
+     * Throws an exception in case any of its attributes' constructors do.
+     */
     insertion_ordered_map() noexcept : data(std::make_shared<data_t>()) {};
 
+    /*
+     * Throws an exception in case any of its attributes' constructors do.
+     */
     insertion_ordered_map(insertion_ordered_map const &other) {
         if (other.data->shareable) {
             data = other.data;
@@ -80,14 +86,21 @@ public:
 
     ~insertion_ordered_map() noexcept = default;
 
-    insertion_ordered_map(insertion_ordered_map &&other) noexcept = default;
+    insertion_ordered_map(insertion_ordered_map &&other) noexcept : data(std::move(other.data)) {};
 
-    insertion_ordered_map &operator=(insertion_ordered_map other) {
+    insertion_ordered_map &operator=(insertion_ordered_map other) noexcept {
         data.swap(other.data);
         return *this;
     };
 
+    /*
+     * Any exception thrown by the inner methods is thrown further up.
+     * In case there has been a memory allocation error in insertion to list, the structure remains intact.
+     * If there has been a memory allocation error in insertion to map after the element has been inserted into
+     * the list, the element is removed from the list. In any case of failure, the structure is unchanged.
+     */
     bool insert(K const &k, V const &v) {
+        // The data structure is copied (only if neccessary) and its original structure backed up.
         auto backup = prepare_to_modify(false);
 
         pair_t pair;
@@ -123,11 +136,14 @@ public:
         }
     };
 
+
     void erase(K const &k) {
+        // A copy is made if necessary by copy-on-write. If the method throws an exception, it is passed further up.
         prepare_to_modify(false);
 
         auto map_it = data->map->find(k);
         if (map_it == data->map->end())
+            // Throws lookup_error in case the element was not found. The structure remains intact.
             throw lookup_error();
 
         auto list_it = map_it->second;
@@ -135,9 +151,17 @@ public:
         data->list->erase(list_it);
     };
 
+
+    /*
+     * Any exception thrown by the inner methods is thrown further up.
+     * In case there has been a memory allocation error at any point, the data structure is restored to its
+     * original condition and remains unchanged.
+     */
     void merge(insertion_ordered_map const &other) {
+        // The data structure is copied (only if neccessary) and its original structure backed up.
         auto backup = prepare_to_modify(false);
 
+        // In case the structure hasn't been copied by copy-on-write, it is now.
         auto data_cp = (data == backup.first) ? std::make_shared<data_t>(*data) : data;
 
         pair_t pair;
@@ -174,6 +198,7 @@ public:
         data = data_cp;
     };
 
+    // Throws a lookup_error if the structure does not contain the element provided.
     V const &at(K const &k) const {
         auto map_it = data->map->find(k);
 
@@ -187,6 +212,12 @@ public:
         return const_cast<V &>(const_cast<const insertion_ordered_map *>(this)->at(k));
     };
 
+    /*
+     * Any exception thrown by the inner methods is thrown further up.
+     * In case there has been a memory allocation error in insertion to list, the structure remains intact.
+     * If there has been a memory allocation error in insertion to map after the element has been inserted into
+     * the list, the element is removed from the list. In any case of failure, the structure is unchanged.
+     */
     template<typename T = V, typename = typename std::enable_if<std::is_default_constructible<T>::value>::type>
     T &operator[](K const &k) {
         auto backup = prepare_to_modify(true);
@@ -222,6 +253,7 @@ public:
     };
 
     void clear() {
+        // A copy is made if necessary by copy-on-write. If the method throws an exception, it is passed further up.
         prepare_to_modify(false);
 
         data->list->clear();
