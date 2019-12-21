@@ -178,24 +178,23 @@ public:
         pair_t pair;
         typename map_t::iterator it = data->map->find(k);
 
-        if (it == data->map->end()) {
-            pair = {k, V()};
-            try {
-                data->list->push_back(pair);
-                typename list_t::iterator it_list = --data->list->end();
-                data->map->insert({k, it_list});
+        if (it != data->map->end())
+            return it->second->second;
 
-                return it_list->second;
-            } catch (std::bad_alloc &e) {
-                if (data != backup.first)
-                    restore_data(backup);
-                else if (!data->list->empty() && data->list->back() == pair)
-                    data->list->pop_back();
-                throw;
-            }
+        pair = {k, V()};
+        try {
+            data->list->push_back(pair);
+            typename list_t::iterator it_list = --data->list->end();
+            data->map->insert({k, it_list});
+
+            return it_list->second;
+        } catch (std::bad_alloc &e) {
+            if (data != backup.first)
+                restore_data(backup);
+            else if (!data->list->empty() && data->list->back() == pair)
+                data->list->pop_back();
+            throw;
         }
-
-        return it->second->second;
     };
 
     [[nodiscard]] size_t size() const noexcept {
