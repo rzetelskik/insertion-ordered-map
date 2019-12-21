@@ -136,6 +136,7 @@ public:
      * jesli jebnie map->insert, to tez sie o tym dowiemy, bo na koncu listy bedzie dodawany element (bo lista nie jebla skoro jebla mapa)
      * i wtedy usuniemy ten dodany element z konca lista
      */
+     // FIXME WARNING !!!! WARNING !!!! Para jest usuwana z listy poza throwem. Jesli w try catchu wyjebie sie lista to ten element nie zostanie przywrocony
     bool insert(K const &k, V const &v) {
         prepare_to_modify(false);
 
@@ -176,8 +177,6 @@ public:
      * zostaje lookup_error ✔️
      */
      //TODO jak wyzej, kiedy moze jebnac comparision object kontenera w naszym przypadku
-     // !!! UPDATE !!! Map::erase wciaz ma silna gwarancje, wiec nawet jesli comparision object wyjebie to mapa sie nie zmodyfikuje, blad zostanie podany wyzej
-     // tyle tylko ze i tak zostanie zrobiona kopia
     void erase(K const &k) {
         prepare_to_modify(false);
 
@@ -188,7 +187,7 @@ public:
         typename list_t::iterator list_it = it->second;
         data->map->erase(it);
         data->list->erase(list_it);
-    };
+    }; //TODO handle exceptions thrown by erase
 
     void merge(insertion_ordered_map const &other)
     {
