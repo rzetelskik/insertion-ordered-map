@@ -1,6 +1,4 @@
-=================================
-Zadanie słownik, JNP1 C++ 2019/20
-=================================
+# Zadanie słownik, JNP1 C++ 2019/20
 
 Celem tego zadania jest zaimplementowanie wzorca kontenera zachowującego się
 jak słownik o oczekiwanym czasie wyszukiwania O(1), mającym jednocześnie
